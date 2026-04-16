@@ -45,6 +45,7 @@ function notify() {
 
 async function fetchVisits() {
   try {
+    console.log('Starting fetchVisits...');
     const { data, error } = await supabase
       .from('visits')
       .select(`
@@ -53,6 +54,8 @@ async function fetchVisits() {
         visitor_passes (id, qr_code, status, valid_from, valid_until, otp, otp_expires_at)
       `)
       .order('checked_in_at', { ascending: false });
+    
+    console.log('fetchVisits response:', { data, error });
       
     if (error) {
       console.error('Error fetching visits:', error);
@@ -60,9 +63,12 @@ async function fetchVisits() {
     }
 
     if (data) {
+      console.log('Raw data from Supabase:', data.length, 'records');
       visits = data.map(rowToVisit);
       console.log('Fetched visits:', visits.length, visits);
       notify();
+    } else {
+      console.log('No data returned from Supabase');
     }
   } catch (err) {
     console.error('Exception fetching visits:', err);
