@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { visitStore } from './visit-store';
 
 export type UserRole = 'admin' | 'guard' | 'receptionist' | null;
 
@@ -74,6 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clearTimeout(sessionTimeout);
         if (session?.user) {
           fetchUserProfile(session.user);
+          // Initialize visit store when user has existing session
+          visitStore.init();
         } else {
           setIsLoading(false);
         }
@@ -90,6 +93,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (mounted) {
         if (session?.user) {
           await fetchUserProfile(session.user);
+          // Initialize visit store when user is authenticated
+          await visitStore.init();
         } else {
           setIsAuthenticated(false);
           setRole(null);
