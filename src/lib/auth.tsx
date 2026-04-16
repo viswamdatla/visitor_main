@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { visitStore } from './visit-store';
 
 export type UserRole = 'admin' | 'guard' | 'receptionist' | null;
 
@@ -24,6 +25,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setUser(authUser);
       setIsAuthenticated(true);
+      
+      // Initialize visit store when user is authenticated
+      visitStore.init();
       
       const { data, error } = await supabase
         .from('profiles')
