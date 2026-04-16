@@ -21,24 +21,38 @@ export default function AllVisits() {
   const todayStr = new Date().toISOString().split('T')[0];
 
   const filtered = useMemo(() => {
-    // Start with today's visits by default
-    let result = visits.filter((v) => v.scheduledDate === todayStr);
+    // Start with all visits by default
+    let result = visits;
 
-    // If any date filter is set, override the today default
+    // If any date filter is set, filter by date
     if (dateFrom || dateTo) {
       result = visits.filter((v) => {
+        // Use check-in date if available, otherwise use scheduled date
+        const dateToCheck = v.checkInTime 
+          ? new Date(v.checkInTime).toISOString().split('T')[0]
+          : v.scheduledDate;
+        
         if (dateFrom) {
-          const vDate = new Date(v.scheduledDate);
+          const vDate = new Date(dateToCheck);
           if (vDate < dateFrom) return false;
         }
         if (dateTo) {
-          const vDate = new Date(v.scheduledDate);
+          const vDate = new Date(dateToCheck);
           const end = new Date(dateTo);
           end.setHours(23, 59, 59, 999);
           if (vDate > end) return false;
         }
         return true;
       });
+    } else {
+      // No date filter - show all visits, but prefer today's by default
+      const todayStr = new Date().toISOString().split('T')[0];
+      const todayVisits = visits.filter((v) => {
+        const checkInDate = v.checkInTime ? new Date(v.checkInTime).toISOString().split('T')[0] : null;
+        return checkInDate === todayStr || v.scheduledDate === todayStr;
+      });
+      // If there are visits today, show them; otherwise show all
+      result = todayVisits.length > 0 ? todayVisits : visits;
     }
 
     // Time filter

@@ -39,7 +39,11 @@ export default function Dashboard() {
   const visits = useSyncExternalStore(visitStore.subscribe, visitStore.getVisits);
   const stats = visitStore.getStats();
   const todayStr = new Date().toISOString().split('T')[0];
-  const todayVisits = visits.filter(v => v.scheduledDate === todayStr);
+  // Consider a visit as "today" if it was checked in today OR scheduled for today
+  const todayVisits = visits.filter(v => {
+    const checkInDate = v.checkInTime ? new Date(v.checkInTime).toISOString().split('T')[0] : null;
+    return checkInDate === todayStr || v.scheduledDate === todayStr;
+  });
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const [time, setTime] = useState(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
   const [activeFilter, setActiveFilter] = useState<FilterType>(null);

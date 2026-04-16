@@ -219,7 +219,11 @@ export const visitStore = {
 
   getStats: () => {
     const today = new Date().toISOString().split('T')[0];
-    const todayVisits = visits.filter(v => v.scheduledDate === today);
+    // Consider a visit as "today" if it was checked in today OR scheduled for today
+    const todayVisits = visits.filter(v => {
+      const checkInDate = v.checkInTime ? new Date(v.checkInTime).toISOString().split('T')[0] : null;
+      return checkInDate === today || v.scheduledDate === today;
+    });
     return {
       totalVisitorsToday: todayVisits.filter(v => v.visitorType === 'visitor').length,
       totalVendorsToday: todayVisits.filter(v => v.visitorType === 'vendor').length,
