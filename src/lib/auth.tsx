@@ -1,0 +1,101 @@
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+
+export type UserRole = 'admin' | 'guard' | 'receptionist' | null;
+
+interface AuthContextType {
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  role: UserRole;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  user: any; 
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [role, setRole] = useState<UserRole>(null);
+  const [user, setUser] = useState<any>(null);
+
+  const fetchUserProfile = async (authUser: any) => {
+    try {
+      setUser(authUser);
+      setIsAuthenticated(true);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('user_id', authUser.id)
+        .single();
+        
+      if (data && !error) {
+        setRole(data.role as UserRole);
+      }
+    } catch (err) {
+      console.error("Profile resolution error:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        fetchUserProfile(session.user);
+      } else {
+        setIsLoading(false);
+      }
+    }).catch((err) => {
+      setIsLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        if (!user || user.id !== session.user.id) {
+           await fetchUserProfile(session.user);
+        }
+      } else {
+        setIsAuthenticated(false);
+        setRole(null);
+        setUser(null);
+        setIsLoading(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const login = useCallback(async (email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }, []);
+
+  const logout = useCallback(async () => {
+    setIsLoading(true);
+    await supabase.auth.signOut();
+  }, []);
+  
+  return (
+    <AuthContext.Provider value={{ isAuthenticated, isLoading, role, login, logout, user }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+     throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return ctx;
+}

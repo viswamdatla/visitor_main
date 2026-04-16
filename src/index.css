@@ -1,0 +1,109 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+
+    --background: 220 20% 95%;
+    --foreground: 215 28% 17%;
+
+    --card: 0 0% 100% / 0.75;
+    --card-foreground: 215 28% 17%;
+
+    --popover: 0 0% 100% / 0.85;
+    --popover-foreground: 215 28% 17%;
+
+    --primary: 187 94% 43%;
+    --primary-foreground: 215 28% 17%;
+
+    --secondary: 0 0% 100% / 0.6;
+    --secondary-foreground: 215 28% 17%;
+
+    --muted: 215 16% 47%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 187 94% 43%;
+    --accent-foreground: 215 28% 17%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 69% 41%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 215 28% 17%;
+
+    --border: 0 0% 100% / 0.6;
+    --input: 0 0% 0% / 0.05;
+    --ring: 187 94% 43%;
+
+    --radius: 1rem;
+
+    --glass-surface: 0 0% 100% / 0.75;
+    --glass-border: 0 0% 100% / 0.6;
+    --glass-blur: 40px;
+
+    --sidebar-background: 0 0% 100% / 0.75;
+    --sidebar-foreground: 215 28% 17%;
+    --sidebar-primary: 187 94% 43%;
+    --sidebar-primary-foreground: 215 28% 17%;
+    --sidebar-accent: 0 0% 100% / 0.6;
+    --sidebar-accent-foreground: 215 28% 17%;
+    --sidebar-border: 0 0% 100% / 0.6;
+    --sidebar-ring: 187 94% 43%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: var(--font-sans);
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-card backdrop-blur-[40px] border border-border;
+  }
+  
+  .glass-strong {
+    background: hsla(0, 0%, 100%, 0.85);
+    backdrop-filter: blur(40px);
+    border: 1px solid hsla(0, 0%, 100%, 0.6);
+  }
+
+  .ambient-blob-1 {
+    position: fixed;
+    top: -20%;
+    left: -10%;
+    width: 60%;
+    height: 60%;
+    background: hsla(213, 93%, 80%, 0.3);
+    border-radius: 50%;
+    filter: blur(120px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .ambient-blob-2 {
+    position: fixed;
+    bottom: -20%;
+    right: -10%;
+    width: 50%;
+    height: 50%;
+    background: hsla(187, 85%, 80%, 0.2);
+    border-radius: 50%;
+    filter: blur(120px);
+    pointer-events: none;
+    z-index: 0;
+  }
+}
