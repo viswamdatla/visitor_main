@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { visitStore } from './visit-store';
 
 export type UserRole = 'admin' | 'guard' | 'receptionist' | null;
 
@@ -26,10 +25,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(authUser);
       setIsAuthenticated(true);
       
-      // Initialize visit store when user is authenticated
-      console.log('User authenticated, initializing visit store...');
-      await visitStore.init();
-      
       const { data, error } = await supabase
         .from('profiles')
         .select('role')
@@ -47,34 +42,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Add timeout to prevent infinite loading
-    const loadingTimeout = setTimeout(() => {
-      if (isLoading) {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        fetchUserProfile(session.user);
+      } else {
         setIsLoading(false);
       }
-    }, 5000); // 5 second timeout
-
-    const initializeAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          await fetchUserProfile(session.user);
-        } else {
-          setIsLoading(false);
-        }
-      } catch (err) {
-        console.error("Auth session error:", err);
-        setIsLoading(false);
-      }
-    };
-
-    initializeAuth();
+    }).catch((err) => {
+      console.error("Session fetch error:", err);
+      setIsLoading(false);
+    });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
-        if (!user || user.id !== session.user.id) {
-           await fetchUserProfile(session.user);
-        }
+        await fetchUserProfile(session.user);
       } else {
         setIsAuthenticated(false);
         setRole(null);
@@ -84,7 +65,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      clearTimeout(loadingTimeout);
       subscription.unsubscribe();
     };
   }, []);
@@ -100,23 +80,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    // Immediately clear the auth state
-    setIsAuthenticated(false);
-    setRole(null);
-    setUser(null);
-    setIsLoading(false);
-    
-    // Sign out in the background without blocking
     try {
-      // Add a timeout to prevent hanging
-      const signOutPromise = supabase.auth.signOut();
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Sign out timeout')), 3000)
-      );
-      await Promise.race([signOutPromise, timeoutPromise]);
+      await supabase.auth.signOut();
+      setIsAuthenticated(false);
+      setRole(null);
+      setUser(null);
     } catch (error) {
       console.error("Logout error:", error);
-      // Even if logout fails, the user is already logged out on the frontend
+    } finally {
+      setIsLoading(false);
     }
   }, []);
   
