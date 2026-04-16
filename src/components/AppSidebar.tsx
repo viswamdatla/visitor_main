@@ -73,7 +73,9 @@ export function AppSidebar() {
           </div>
         </div>
         <button
-          onClick={() => auth.logout()}
+          onClick={() => {
+            auth.logout().catch(err => console.error('Logout error:', err));
+          }}
           className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
         >
           <LogOut className="size-4" />
