@@ -1,4 +1,4 @@
-import { useState, useRef, useSyncExternalStore } from 'react';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { Users, Truck, ShieldCheck, Activity, Clock, CalendarDays, X, LogOut, Copy, Download, Share2, Check } from 'lucide-react';
 import { AppLayout } from '@/components/AppLayout';
 import { StatCard } from '@/components/StatCard';
@@ -41,11 +41,18 @@ export default function Dashboard() {
   const todayStr = new Date().toISOString().split('T')[0];
   const todayVisits = visits.filter(v => v.scheduledDate === todayStr);
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const [time, setTime] = useState(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
   const [activeFilter, setActiveFilter] = useState<FilterType>(null);
   const [selectedVisit, setSelectedVisit] = useState<Visit | null>(null);
   const [copied, setCopied] = useState(false);
   const qrRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTime(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const toggle = (filter: FilterType) => setActiveFilter(prev => prev === filter ? null : filter);
   const filteredVisits = activeFilter ? filterVisits(visits, activeFilter) : [];

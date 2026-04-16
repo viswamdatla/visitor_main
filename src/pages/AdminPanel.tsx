@@ -9,16 +9,30 @@ import bgAdmin from '@/assets/bg-admin.jpg';
 export default function AdminPanel() {
   const visits = useSyncExternalStore(visitStore.subscribe, visitStore.getVisits);
   const [activeTab, setActiveTab] = useState<'visits' | 'employees'>('visits');
+  const [dateFrom, setDateFrom] = useState<string>(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+  const [dateTo, setDateTo] = useState<string>(new Date().toISOString().split('T')[0]);
+
+  const filteredVisits = visits.filter(v => v.scheduledDate >= dateFrom && v.scheduledDate <= dateTo).sort((a, b) => {
+    const dateA = new Date(`${a.scheduledDate}T${a.scheduledTime || '00:00'}`).getTime();
+    const dateB = new Date(`${b.scheduledDate}T${b.scheduledTime || '00:00'}`).getTime();
+    return dateA - dateB;
+  });
+
+  const formatTime = (iso?: string) => {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  };
 
   const exportCSV = () => {
-    const headers = ['ID', 'Visitor', 'Company', 'Host', 'Purpose', 'Date', 'Time', 'Status', 'Type'];
-    const rows = visits.map(v => [v.id, v.visitorName, v.visitorCompany, v.hostName, v.purpose, v.scheduledDate, v.scheduledTime, v.status, v.visitorType]);
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+    const headers = ['ID', 'Visitor', 'Company', 'Host', 'Purpose', 'Date', 'In Time', 'Out Time', 'Status', 'Type'];
+    const rows = filteredVisits.map(v => [v.id, v.visitorName, v.visitorCompany, v.hostName, v.purpose, v.scheduledDate, formatTime(v.checkInTime), formatTime(v.checkOutTime), v.status, v.visitorType]);
+    const csv = [headers, ...rows].map(r => r.map(cell => `"${cell}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `visitflow-report-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `visitflow-report-${dateFrom}-to-${dateTo}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -31,9 +45,27 @@ export default function AdminPanel() {
             <h2 className="text-3xl font-medium text-foreground tracking-tight mb-2">Admin Panel</h2>
             <p className="text-sm text-muted-foreground">Manage employees and view all visit records.</p>
           </div>
-          <button onClick={exportCSV} className="flex items-center gap-2 px-5 py-3 rounded-xl bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity">
-            <Download className="size-4" /> Export CSV
-          </button>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
+            <div className="flex gap-2 w-full sm:w-auto">
+              <input 
+                type="date" 
+                value={dateFrom} 
+                onChange={e => setDateFrom(e.target.value)}
+                className="px-4 py-2.5 rounded-xl bg-foreground text-background text-sm font-medium outline-none focus:opacity-80 transition-opacity cursor-pointer [color-scheme:dark]"
+                style={{ colorScheme: 'dark' }}
+              />
+              <input 
+                type="date" 
+                value={dateTo} 
+                onChange={e => setDateTo(e.target.value)}
+                className="px-4 py-2.5 rounded-xl bg-foreground text-background text-sm font-medium outline-none focus:opacity-80 transition-opacity cursor-pointer [color-scheme:dark]"
+                style={{ colorScheme: 'dark' }}
+              />
+            </div>
+            <button onClick={exportCSV} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-foreground text-background text-sm font-medium hover:opacity-90 transition-opacity whitespace-nowrap">
+              <Download className="size-4" /> Export CSV
+            </button>
+          </div>
         </div>
 
         <div className="flex gap-2 mb-8">
@@ -52,7 +84,7 @@ export default function AdminPanel() {
           ))}
         </div>
 
-        {activeTab === 'visits' && <VisitTable visits={visits} />}
+        {activeTab === 'visits' && <VisitTable visits={filteredVisits} showTimes={true} />}
 
         {activeTab === 'employees' && (
           <div className="glass rounded-2xl overflow-hidden">

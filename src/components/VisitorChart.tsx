@@ -5,7 +5,7 @@ interface Props {
   visits: Visit[];
 }
 
-const HOURS = ['8 AM','9 AM','10 AM','11 AM','12 PM','1 PM','2 PM','3 PM','4 PM','5 PM'];
+const HOURS = ['7 AM','8 AM','9 AM','10 AM','11 AM','12 PM','1 PM','2 PM','3 PM','4 PM','5 PM','6 PM'];
 
 function buildChartData(visits: Visit[]) {
   const today = new Date().toISOString().split('T')[0];
@@ -13,11 +13,11 @@ function buildChartData(visits: Visit[]) {
 
   return HOURS.map(label => {
     const hourVisits = todayVisits.filter(v => {
-      if (!v.scheduledTime) return false;
-      const [h] = v.scheduledTime.split(':');
-      const hour = parseInt(h, 10);
+      if (!v.checkInTime) return false;
+      const checkInDate = new Date(v.checkInTime);
+      const hour = checkInDate.getHours();
       const idx = HOURS.indexOf(label);
-      const targetHour = idx + 8; // 8 AM = index 0
+      const targetHour = idx + 7; // 7 AM = index 0
       return hour === targetHour;
     });
     return {

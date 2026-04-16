@@ -61,36 +61,46 @@ export default function SecurityDashboard() {
     // Wait for DOM element to render
     await new Promise(r => setTimeout(r, 300));
 
-    const scanner = new Html5Qrcode('qr-reader');
-    scannerRef.current = scanner;
-
     try {
-      await scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          processQRData(decodedText);
-          stopCamera();
-        },
-        () => {}
-      );
-    } catch (err) {
-      // Try user-facing camera as fallback
+      if (scannerRef.current) {
+        try {
+          await scannerRef.current.stop();
+          scannerRef.current.clear();
+        } catch {}
+      }
+
+      const scanner = new Html5Qrcode('qr-reader');
+      scannerRef.current = scanner;
+
       try {
         await scanner.start(
-          { facingMode: 'user' },
+          { facingMode: 'environment' },
           { fps: 10, qrbox: { width: 250, height: 250 } },
           (decodedText) => {
             processQRData(decodedText);
-            stopCamera();
           },
           () => {}
         );
-      } catch {
-        toast({ title: 'Camera Error', description: 'Could not access camera. Please allow camera permissions.', variant: 'destructive' });
-        setCameraOpen(false);
-        scannerRef.current = null;
+      } catch (err) {
+        // Try user-facing camera as fallback
+        try {
+          await scanner.start(
+            { facingMode: 'user' },
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            (decodedText) => {
+              processQRData(decodedText);
+            },
+            () => {}
+          );
+        } catch {
+          toast({ title: 'Camera Error', description: 'Could not access camera. Please allow camera permissions.', variant: 'destructive' });
+          setCameraOpen(false);
+          scannerRef.current = null;
+        }
       }
+    } catch (error) {
+      toast({ title: 'Camera Error', description: 'Could not initialize camera.', variant: 'destructive' });
+      setCameraOpen(false);
     }
   }, [processQRData, stopCamera]);
 
@@ -112,15 +122,62 @@ export default function SecurityDashboard() {
 
   const handleVerifyOTP = async () => {
     if (!scannedVisit) return;
-    if (scannedVisit.otp === otpInput) {
+    
+    // Check if OTP has expired
+    if (scannedVisit.otpExpiresAt) {
+      const expiryTime = new Date(scannedVisit.otpExpiresAt).getTime();
+      if (Date.now() > expiryTime) {
+        toast({ title: 'OTP Expired', description: 'The OTP has expired. Please request a new pass.', variant: 'destructive' });
+        return;
+      }
+    }
+    
+    // Check if OTP matches (convert both to string for consistent comparison)
+    const otpToCompare = String(scannedVisit.otp).trim();
+    const userOtp = String(otpInput).trim();
+    
+    if (otpToCompare === userOtp && otpToCompare !== '') {
       const now = new Date().toISOString();
       await visitStore.updateVisit(scannedVisit.id, { status: 'checked_in', checkInTime: now });
       setScannedVisit({ ...scannedVisit, status: 'checked_in', checkInTime: now });
       toast({ title: 'Entry Allowed ✓', description: `${scannedVisit.visitorName} has been checked in.` });
       setOtpInput('');
     } else {
-      toast({ title: 'Invalid OTP', description: 'The OTP does not match.', variant: 'destructive' });
+      toast({ title: 'Invalid OTP', description: 'The OTP does not match. Please try again.', variant: 'destructive' });
     }
+  };
+
+  const handleAllowEntry = async () => {
+    if (!scannedVisit) return;
+    
+    // Check if pass is for today
+    const today = new Date().toISOString().split('T')[0];
+    if (scannedVisit.scheduledDate !== today) {
+      toast({ title: 'Invalid Pass Date', description: 'This pass is not valid for today.', variant: 'destructive' });
+      return;
+    }
+    
+    // Check if already checked out
+    if (scannedVisit.status === 'checked_out') {
+      toast({ title: 'Already Checked Out', description: 'This visitor has already checked out and cannot check in again.', variant: 'destructive' });
+      return;
+    }
+    
+    // Check if already checked in
+    if (scannedVisit.status === 'checked_in') {
+      toast({ title: 'Already Checked In', description: 'This visitor is already checked in.', variant: 'destructive' });
+      return;
+    }
+    
+    const now = new Date().toISOString();
+    await visitStore.updateVisit(scannedVisit.id, { status: 'checked_in', checkInTime: now });
+    setScannedVisit({ ...scannedVisit, status: 'checked_in', checkInTime: now });
+    toast({ title: 'Entry Allowed ✓', description: `${scannedVisit.visitorName} has been checked in.` });
+    
+    // Reset for next scan (keep camera open)
+    setScannedVisit(null);
+    setScanInput('');
+    setOtpInput('');
   };
 
   const handleDeny = async () => {
@@ -128,6 +185,11 @@ export default function SecurityDashboard() {
     await visitStore.updateVisit(scannedVisit.id, { status: 'denied' });
     setScannedVisit({ ...scannedVisit, status: 'denied' });
     toast({ title: 'Entry Denied', description: `${scannedVisit.visitorName} has been denied entry.` });
+    
+    // Reset for next scan (keep camera open)
+    setScannedVisit(null);
+    setScanInput('');
+    setOtpInput('');
   };
 
   const handleCheckOut = async (visit: Visit) => {
@@ -144,14 +206,27 @@ export default function SecurityDashboard() {
       toast({ title: 'Enter OTP', description: 'Please enter the 6-digit OTP.', variant: 'destructive' });
       return;
     }
-    const visit = visits.find(v => v.otp === directOtp && v.status === 'approved');
+    const today = new Date().toISOString().split('T')[0];
+    const visit = visits.find(v => {
+      // Check if OTP matches
+      if (String(v.otp).trim() !== String(directOtp).trim()) return false;
+      // Check if status is approved
+      if (v.status === 'checked_out') return false; // Cannot check in if already checked out
+      if (v.status === 'checked_in') return false; // Cannot check in if already checked in
+      if (v.status !== 'approved') return false;
+      // Check if pass is for today
+      if (v.scheduledDate !== today) return false;
+      // Check if OTP hasn't expired
+      if (v.otpExpiresAt && Date.now() > new Date(v.otpExpiresAt).getTime()) return false;
+      return true;
+    });
     if (visit) {
       const now = new Date().toISOString();
       await visitStore.updateVisit(visit.id, { status: 'checked_in', checkInTime: now });
       toast({ title: 'Entry Allowed ✓', description: `${visit.visitorName} has been checked in via OTP.` });
       setDirectOtp('');
     } else {
-      toast({ title: 'Invalid OTP', description: 'No approved visit found with this OTP.', variant: 'destructive' });
+      toast({ title: 'Invalid OTP', description: 'No approved visit found with this OTP, it may have expired, or this pass is not valid for today.', variant: 'destructive' });
     }
   };
 
@@ -220,10 +295,8 @@ export default function SecurityDashboard() {
 
                 {scannedVisit.status === 'approved' && (
                   <div className="pt-4 space-y-3">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-[2px] block">Enter OTP</label>
-                    <input value={otpInput} onChange={e => setOtpInput(e.target.value)} placeholder="6-digit OTP" maxLength={6} className="w-full bg-input rounded-2xl px-5 py-4 text-sm text-foreground text-center tracking-[0.3em] text-lg font-bold placeholder:text-muted-foreground/50 outline-none transition-all focus:bg-secondary focus:shadow-md" />
                     <div className="flex gap-3">
-                      <button onClick={handleVerifyOTP} className="flex-1 h-12 rounded-xl bg-success text-success-foreground font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                      <button onClick={handleAllowEntry} className="flex-1 h-12 rounded-xl bg-success text-success-foreground font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
                         <ShieldCheck className="size-4" /> Allow Entry
                       </button>
                       <button onClick={handleDeny} className="flex-1 h-12 rounded-xl bg-destructive text-destructive-foreground font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-2">

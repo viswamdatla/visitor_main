@@ -23,7 +23,7 @@ function rowToVisit(row: any): Visit {
     hostName: visitor.host_name || '',
     hostDepartment: visitor.host_department || '',
     scheduledDate: pass.valid_from ? new Date(pass.valid_from).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-    scheduledTime: '',
+    scheduledTime: pass.valid_from ? new Date(pass.valid_from).toISOString().split('T')[1].substring(0, 5) : '',
     status: status,
     otp: row.notes || pass.otp || '',
     otpExpiresAt: pass.otp_expires_at || '',
@@ -166,10 +166,18 @@ export const visitStore = {
       if (error) console.error('Error updating visit check times:', error);
     }
     
-    if (updates.status === 'expired' || updates.status === 'denied') {
+    if (updates.status === 'checked_in' || updates.status === 'expired' || updates.status === 'denied') {
       const existing = await supabase.from('visits').select('pass_id').eq('id', id).single();
       if (existing.data?.pass_id) {
-        await supabase.from('visitor_passes').update({ status: 'expired' }).eq('id', existing.data.pass_id);
+        const statusMap: Record<string, string> = {
+          'checked_in': 'used',
+          'expired': 'expired',
+          'denied': 'expired',
+        };
+        const newPassStatus = statusMap[updates.status || ''];
+        if (newPassStatus) {
+          await supabase.from('visitor_passes').update({ status: newPassStatus }).eq('id', existing.data.pass_id);
+        }
       }
     }
     

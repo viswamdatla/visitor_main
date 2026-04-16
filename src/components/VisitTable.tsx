@@ -23,7 +23,6 @@ export function VisitTable({ visits, onRowClick, showTimes = false }: VisitTable
               <th className="text-left px-6 py-4 text-xs font-semibold uppercase tracking-[2px] text-muted-foreground">Visitor</th>
               <th className="text-left px-6 py-4 text-xs font-semibold uppercase tracking-[2px] text-muted-foreground">Company</th>
               <th className="text-left px-6 py-4 text-xs font-semibold uppercase tracking-[2px] text-muted-foreground">Host</th>
-              <th className="text-left px-6 py-4 text-xs font-semibold uppercase tracking-[2px] text-muted-foreground">Time</th>
               {showTimes && (
                 <>
                   <th className="text-left px-6 py-4 text-xs font-semibold uppercase tracking-[2px] text-muted-foreground">In Time</th>
@@ -50,7 +49,6 @@ export function VisitTable({ visits, onRowClick, showTimes = false }: VisitTable
                   <div className="text-foreground">{visit.hostName}</div>
                   <div className="text-xs text-muted-foreground">{visit.hostDepartment}</div>
                 </td>
-                <td className="px-6 py-4 text-muted-foreground tabular-nums">{visit.scheduledTime}</td>
                 {showTimes && (
                   <>
                     <td className="px-6 py-4 text-muted-foreground tabular-nums">{formatTime(visit.checkInTime)}</td>
