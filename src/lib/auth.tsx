@@ -25,14 +25,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(authUser);
       setIsAuthenticated(true);
       
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('user_id', authUser.id)
-        .single();
+      // Set a 5-second timeout for profile fetch
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('user_id', authUser.id)
+          .single();
         
-      if (data && !error) {
-        setRole(data.role as UserRole);
+        clearTimeout(timeoutId);
+        
+        if (data && !error) {
+          setRole(data.role as UserRole);
+        } else if (error) {
+          console.warn("Profile fetch warning:", error);
+          // Allow app to load even if profile fetch fails
+          setRole(null);
+        }
+      } catch (queryErr) {
+        clearTimeout(timeoutId);
+        console.warn("Profile query timeout or error:", queryErr);
+        // Continue without role - don't block loading
+        setRole(null);
       }
     } catch (err) {
       console.error("Profile resolution error:", err);
@@ -42,29 +59,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        fetchUserProfile(session.user);
-      } else {
+    let mounted = true;
+    
+    // Set timeout for initial session check
+    const sessionTimeout = setTimeout(() => {
+      if (mounted) {
+        console.warn("Session check timeout");
         setIsLoading(false);
       }
+    }, 8000);
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted) {
+        clearTimeout(sessionTimeout);
+        if (session?.user) {
+          fetchUserProfile(session.user);
+        } else {
+          setIsLoading(false);
+        }
+      }
     }).catch((err) => {
-      console.error("Session fetch error:", err);
-      setIsLoading(false);
+      if (mounted) {
+        clearTimeout(sessionTimeout);
+        console.error("Session fetch error:", err);
+        setIsLoading(false);
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        await fetchUserProfile(session.user);
-      } else {
-        setIsAuthenticated(false);
-        setRole(null);
-        setUser(null);
-        setIsLoading(false);
+      if (mounted) {
+        if (session?.user) {
+          await fetchUserProfile(session.user);
+        } else {
+          setIsAuthenticated(false);
+          setRole(null);
+          setUser(null);
+          setIsLoading(false);
+        }
       }
     });
 
     return () => {
+      mounted = false;
+      clearTimeout(sessionTimeout);
       subscription.unsubscribe();
     };
   }, []);
