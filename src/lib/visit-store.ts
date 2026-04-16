@@ -37,6 +37,7 @@ function rowToVisit(row: any): Visit {
 let visits: Visit[] = [];
 let listeners: (() => void)[] = [];
 let initialized = false;
+let refreshInterval: NodeJS.Timeout | null = null;
 
 function notify() {
   listeners.forEach(l => l());
@@ -76,6 +77,13 @@ async function init() {
   initialized = true;
   console.log('Initializing visit store...');
   await fetchVisits();
+
+  // Set up periodic refetch every 30 seconds
+  if (refreshInterval) clearInterval(refreshInterval);
+  refreshInterval = setInterval(() => {
+    console.log('Periodic refetch from Supabase...');
+    fetchVisits();
+  }, 30000);
 
   // Simple unoptimized real-time listening that refetches everything
   supabase.channel('public:visits')
@@ -204,7 +212,8 @@ export const visitStore = {
 
   subscribe: (listener: () => void) => {
     listeners.push(listener);
-    init();
+    // Always fetch fresh data when a new subscriber connects
+    fetchVisits().then(() => init());
     return () => { Object.is(listeners = listeners.filter(l => l !== listener), []); };
   },
 
