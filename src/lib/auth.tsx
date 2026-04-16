@@ -95,15 +95,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Immediately clear the auth state
+    setIsAuthenticated(false);
+    setRole(null);
+    setUser(null);
+    setIsLoading(false);
+    
+    // Sign out in the background without blocking
     try {
-      setIsLoading(true);
-      setIsAuthenticated(false);
-      setRole(null);
-      setUser(null);
-      await supabase.auth.signOut();
+      // Add a timeout to prevent hanging
+      const signOutPromise = supabase.auth.signOut();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Sign out timeout')), 3000)
+      );
+      await Promise.race([signOutPromise, timeoutPromise]);
     } catch (error) {
       console.error("Logout error:", error);
-      setIsLoading(false);
+      // Even if logout fails, the user is already logged out on the frontend
     }
   }, []);
   
