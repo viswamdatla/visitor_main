@@ -43,34 +43,52 @@ function notify() {
 }
 
 async function fetchVisits() {
-  const { data, error } = await supabase
-    .from('visits')
-    .select(`
-      id, created_at, checked_in_at, checked_out_at, purpose, pass_id, notes,
-      visitors (id, full_name, company, phone, host_name, host_department),
-      visitor_passes (id, qr_code, status, valid_from, valid_until, otp, otp_expires_at)
-    `)
-    .order('created_at', { ascending: false });
-    
-  if (!error && data) {
-    visits = data.map(rowToVisit);
-    notify();
-  } else if (error) {
-    console.error('Error fetching visits:', error);
+  try {
+    const { data, error } = await supabase
+      .from('visits')
+      .select(`
+        id, created_at, checked_in_at, checked_out_at, purpose, pass_id, notes,
+        visitors (id, full_name, company, phone, host_name, host_department),
+        visitor_passes (id, qr_code, status, valid_from, valid_until, otp, otp_expires_at)
+      `)
+      .order('created_at', { ascending: false });
+      
+    if (error) {
+      console.error('Error fetching visits:', error);
+      return;
+    }
+
+    if (data) {
+      visits = data.map(rowToVisit);
+      console.log('Fetched visits:', visits.length, visits);
+      notify();
+    }
+  } catch (err) {
+    console.error('Exception fetching visits:', err);
   }
 }
 
 async function init() {
-  if (initialized) return;
+  if (initialized) {
+    console.log('Visit store already initialized');
+    return;
+  }
   initialized = true;
+  console.log('Initializing visit store...');
   await fetchVisits();
 
   // Simple unoptimized real-time listening that refetches everything
   supabase.channel('public:visits')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'visits' }, () => fetchVisits())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'visits' }, () => {
+      console.log('Visits table changed, refetching...');
+      fetchVisits();
+    })
     .subscribe();
   supabase.channel('public:visitor_passes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'visitor_passes' }, () => fetchVisits())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'visitor_passes' }, () => {
+      console.log('Visitor passes table changed, refetching...');
+      fetchVisits();
+    })
     .subscribe();
 }
 

@@ -27,7 +27,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsAuthenticated(true);
       
       // Initialize visit store when user is authenticated
-      visitStore.init();
+      console.log('User authenticated, initializing visit store...');
+      await visitStore.init();
       
       const { data, error } = await supabase
         .from('profiles')
