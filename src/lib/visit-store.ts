@@ -30,7 +30,7 @@ function rowToVisit(row: any): Visit {
     secureToken: pass.qr_code || '',
     checkInTime: row.checked_in_at || undefined,
     checkOutTime: row.checked_out_at || undefined,
-    createdAt: row.created_at || new Date().toISOString(),
+    createdAt: row.checked_in_at || new Date().toISOString(),
   };
 }
 
@@ -48,11 +48,11 @@ async function fetchVisits() {
     const { data, error } = await supabase
       .from('visits')
       .select(`
-        id, created_at, checked_in_at, checked_out_at, purpose, pass_id, notes,
+        id, checked_in_at, checked_out_at, purpose, pass_id, notes,
         visitors (id, full_name, company, phone, host_name, host_department),
         visitor_passes (id, qr_code, status, valid_from, valid_until, otp, otp_expires_at)
       `)
-      .order('created_at', { ascending: false });
+      .order('checked_in_at', { ascending: false });
       
     if (error) {
       console.error('Error fetching visits:', error);
