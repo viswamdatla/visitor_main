@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
-export type UserRole = 'admin' | 'guard' | 'receptionist' | null;
+export type UserRole = 'admin' | 'guard' | 'receptionist' | 'hr' | 'operations' | 'finance' | 'sales' | 'it' | 'research' | null;
 
 interface AuthContextType {
   isAuthenticated: boolean;

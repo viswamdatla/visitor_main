@@ -14,8 +14,10 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+import { Navigate } from 'react-router-dom';
+
 function AppRoutes() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, role } = useAuth();
 
   if (isLoading) {
     return (
@@ -34,9 +36,11 @@ function AppRoutes() {
     );
   }
 
+  const isDepartmentUser = role && !['admin', 'guard', 'receptionist'].includes(role);
+
   return (
     <Routes>
-      <Route path="/" element={<Dashboard />} />
+      <Route path="/" element={isDepartmentUser ? <Navigate to="/create-pass" replace /> : <Dashboard />} />
       <Route path="/create-pass" element={<CreatePass />} />
       <Route path="/visits" element={<AllVisits />} />
       <Route path="/security" element={<SecurityDashboard />} />

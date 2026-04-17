@@ -10,8 +10,10 @@ import { CalendarIcon, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import bgAllVisits from '@/assets/bg-all-visits.jpg';
+import { useAuth } from '@/lib/auth.tsx';
 
 export default function AllVisits() {
+  const auth = useAuth();
   const visits = useSyncExternalStore(visitStore.subscribe, visitStore.getVisits);
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
@@ -21,12 +23,23 @@ export default function AllVisits() {
   const todayStr = new Date().toISOString().split('T')[0];
 
   const filtered = useMemo(() => {
-    // Start with all visits by default
+    // Start with all visits
     let result = visits;
+
+    // Role-based filtering
+    if (auth.role && !['admin', 'guard', 'receptionist'].includes(auth.role)) {
+      result = result.filter(v => {
+        const dept = (v.hostDepartment || '').toLowerCase();
+        if (auth.role === 'sales') {
+          return dept === 'sales' || dept === 'marketing';
+        }
+        return dept === auth.role;
+      });
+    }
 
     // If any date filter is set, filter by date
     if (dateFrom || dateTo) {
-      result = visits.filter((v) => {
+      result = result.filter((v) => {
         // Use check-in date if available, otherwise use scheduled date
         const dateToCheck = v.checkInTime 
           ? new Date(v.checkInTime).toISOString().split('T')[0]
@@ -46,13 +59,12 @@ export default function AllVisits() {
       });
     } else {
       // No date filter - show all visits, but prefer today's by default
-      const todayStr = new Date().toISOString().split('T')[0];
-      const todayVisits = visits.filter((v) => {
+      const todayVisits = result.filter((v) => {
         const checkInDate = v.checkInTime ? new Date(v.checkInTime).toISOString().split('T')[0] : null;
         return checkInDate === todayStr || v.scheduledDate === todayStr;
       });
       // If there are visits today, show them; otherwise show all
-      result = todayVisits.length > 0 ? todayVisits : visits;
+      result = todayVisits.length > 0 ? todayVisits : result;
     }
 
     // Time filter
@@ -60,7 +72,7 @@ export default function AllVisits() {
     if (timeTo) result = result.filter((v) => v.scheduledTime <= timeTo);
 
     return result;
-  }, [visits, todayStr, dateFrom, dateTo, timeFrom, timeTo]);
+  }, [visits, auth.role, todayStr, dateFrom, dateTo, timeFrom, timeTo]);
 
   const hasFilters = dateFrom || dateTo || timeFrom || timeTo;
 

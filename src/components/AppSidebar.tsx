@@ -19,9 +19,33 @@ const navItems = [
   { title: 'Admin Panel', path: '/admin', icon: Settings },
 ];
 
+const getNavItems = (role: string | null) => {
+  if (role === 'admin') return navItems;
+  if (role === 'guard') return navItems.filter(i => i.title === 'Security Gate' || i.title === 'All Visits');
+  // All department roles see only Create Pass & All Visits
+  return navItems.filter(i => i.title === 'Create Pass' || i.title === 'All Visits');
+};
+
+const roleTitles: Record<string, string> = {
+  admin: 'Administrator',
+  guard: 'Security Guard',
+  receptionist: 'Reception',
+  hr: 'HR Department',
+  operations: 'Operations',
+  finance: 'Finance',
+  sales: 'Sales & Marketing',
+  it: 'IT Department',
+  research: 'Research',
+};
+
 export function AppSidebar() {
   const location = useLocation();
   const auth = useAuth();
+  
+  const itemsToDisplay = getNavItems(auth.role);
+  const userTitle = auth.role ? roleTitles[auth.role] || 'User' : 'User';
+  const userEmail = auth.user?.email || '';
+
   return (
     <nav className="relative z-10 w-[260px] shrink-0 flex flex-col justify-between p-6 glass-strong">
       <div>
@@ -35,7 +59,7 @@ export function AppSidebar() {
         </Link>
 
         <div className="flex flex-col gap-1">
-          {navItems.map((item) => {
+          {itemsToDisplay.map((item) => {
             const isActive = location.pathname === item.path;
             return (
               <Link
@@ -68,8 +92,8 @@ export function AppSidebar() {
             <Users className="size-4 text-primary" />
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-medium text-foreground truncate">Admin</div>
-            <div className="text-xs text-muted-foreground truncate">ACS@123</div>
+            <div className="text-sm font-medium text-foreground truncate">{userTitle}</div>
+            <div className="text-xs text-muted-foreground truncate">{userEmail}</div>
           </div>
         </div>
         <button

@@ -7,9 +7,11 @@ import { toast } from '@/hooks/use-toast';
 import { QRCodeSVG } from 'qrcode.react';
 import { Copy, Download, Share2, Check, X } from 'lucide-react';
 import bgCreatePass from '@/assets/bg-create-pass.jpg';
+import { useAuth } from '@/lib/auth.tsx';
 
 export default function CreatePass() {
   const navigate = useNavigate();
+  const { role } = useAuth();
   const [form, setForm] = useState({
     visitorName: '',
     visitorCompany: '',
@@ -246,7 +248,12 @@ export default function CreatePass() {
                 className="w-full bg-input rounded-2xl px-5 py-4 text-sm text-foreground outline-none transition-all focus:bg-secondary focus:shadow-md appearance-none"
               >
                 <option value="">Select host employee...</option>
-                {employees.map(emp => (
+                {employees.filter(emp => {
+                  if (!role || ['admin', 'guard', 'receptionist'].includes(role)) return true;
+                  const dept = emp.department.toLowerCase();
+                  if (role === 'sales') return dept === 'sales' || dept === 'marketing';
+                  return dept === role;
+                }).map(emp => (
                   <option key={emp.id} value={emp.id}>{emp.name} — {emp.department}</option>
                 ))}
               </select>
