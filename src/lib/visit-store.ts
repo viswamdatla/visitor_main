@@ -17,7 +17,7 @@ function rowToVisit(row: any): Visit {
     visitorName: visitor.full_name || '',
     visitorCompany: visitor.company || '',
     visitorMobile: visitor.phone || '',
-    visitorType: 'visitor',
+    visitorType: row.visitor_type || 'visitor',
     purpose: row.purpose || '',
     hostId: '', 
     hostName: visitor.host_name || '',
@@ -43,13 +43,20 @@ function notify() {
   listeners.forEach(l => l());
 }
 
+let isFetching = false;
+
 async function fetchVisits() {
+  if (isFetching) {
+    console.log('Skipping fetchVisits as it is already running...');
+    return;
+  }
+  isFetching = true;
   try {
     console.log('Starting fetchVisits...');
     const { data, error } = await supabase
       .from('visits')
       .select(`
-        id, checked_in_at, checked_out_at, purpose, pass_id, notes,
+        id, checked_in_at, checked_out_at, purpose, pass_id, notes, visitor_type,
         visitors (id, full_name, company, phone, host_name, host_department),
         visitor_passes (id, qr_code, status, valid_from, valid_until, otp, otp_expires_at)
       `)
@@ -72,6 +79,8 @@ async function fetchVisits() {
     }
   } catch (err) {
     console.error('Exception fetching visits:', err);
+  } finally {
+    isFetching = false;
   }
 }
 
@@ -84,26 +93,54 @@ async function init() {
   console.log('Initializing visit store...');
   await fetchVisits();
 
-  // Set up periodic refetch every 30 seconds
+  // Set up periodic refetch every 10 seconds for reliability
   if (refreshInterval) clearInterval(refreshInterval);
-  refreshInterval = setInterval(() => {
+  refreshInterval = setInterval(async () => {
     console.log('Periodic refetch from Supabase...');
-    fetchVisits();
-  }, 30000);
+    await fetchVisits();
+  }, 10000);
 
-  // Simple unoptimized real-time listening that refetches everything
-  supabase.channel('public:visits')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'visits' }, () => {
-      console.log('Visits table changed, refetching...');
-      fetchVisits();
-    })
-    .subscribe();
-  supabase.channel('public:visitor_passes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'visitor_passes' }, () => {
-      console.log('Visitor passes table changed, refetching...');
-      fetchVisits();
-    })
-    .subscribe();
+  // Real-time listening for visits table
+  try {
+    supabase.channel('public:visits')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'visits' }, () => {
+        console.log('Visits table changed, refetching...');
+        fetchVisits();
+      })
+      .subscribe((status) => {
+        console.log('Visits channel subscription status:', status);
+      });
+  } catch (err) {
+    console.error('Error subscribing to visits channel:', err);
+  }
+
+  // Real-time listening for visitor_passes table
+  try {
+    supabase.channel('public:visitor_passes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'visitor_passes' }, () => {
+        console.log('Visitor passes table changed, refetching...');
+        fetchVisits();
+      })
+      .subscribe((status) => {
+        console.log('Visitor passes channel subscription status:', status);
+      });
+  } catch (err) {
+    console.error('Error subscribing to visitor_passes channel:', err);
+  }
+
+  // Real-time listening for visitors table
+  try {
+    supabase.channel('public:visitors')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'visitors' }, () => {
+        console.log('Visitors table changed, refetching...');
+        fetchVisits();
+      })
+      .subscribe((status) => {
+        console.log('Visitors channel subscription status:', status);
+      });
+  } catch (err) {
+    console.error('Error subscribing to visitors channel:', err);
+  }
 }
 
 export const visitStore = {
@@ -173,6 +210,7 @@ export const visitStore = {
         visitor_id: visitorData.id,
         pass_id: passData.id,
         purpose: visit.purpose,
+        visitor_type: visit.visitorType,
         notes: null, // No longer storing OTP in notes
       })
       .select('id').single();
@@ -195,11 +233,19 @@ export const visitStore = {
       if (updates.checkOutTime) payload.checked_out_at = updates.checkOutTime;
       
       const { error } = await supabase.from('visits').update(payload).eq('id', id);
-      if (error) console.error('Error updating visit check times:', error);
+      if (error) {
+        console.error('Error updating visit check times:', error);
+        throw new Error(`Failed to update check times: ${error.message}`);
+      }
     }
     
     if (updates.status === 'checked_in' || updates.status === 'expired' || updates.status === 'denied') {
       const existing = await supabase.from('visits').select('pass_id').eq('id', id).single();
+      if (existing.error) {
+        console.error('Error fetching visit:', existing.error);
+        throw new Error(`Failed to fetch visit: ${existing.error.message}`);
+      }
+      
       if (existing.data?.pass_id) {
         const statusMap: Record<string, string> = {
           'checked_in': 'used',
@@ -208,7 +254,11 @@ export const visitStore = {
         };
         const newPassStatus = statusMap[updates.status || ''];
         if (newPassStatus) {
-          await supabase.from('visitor_passes').update({ status: newPassStatus }).eq('id', existing.data.pass_id);
+          const { error: updateError } = await supabase.from('visitor_passes').update({ status: newPassStatus }).eq('id', existing.data.pass_id);
+          if (updateError) {
+            console.error('Error updating pass status:', updateError);
+            throw new Error(`Failed to update pass status: ${updateError.message}`);
+          }
         }
       }
     }
@@ -219,8 +269,13 @@ export const visitStore = {
   subscribe: (listener: () => void) => {
     listeners.push(listener);
     // Always fetch fresh data when a new subscriber connects
-    fetchVisits().then(() => init());
-    return () => { Object.is(listeners = listeners.filter(l => l !== listener), []); };
+    (async () => {
+      await fetchVisits();
+      await init();
+      // Notify after initialization
+      notify();
+    })();
+    return () => { listeners = listeners.filter(l => l !== listener); };
   },
 
   getStats: () => {

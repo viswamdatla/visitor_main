@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { visitStore } from './visit-store';
 
 export type UserRole = 'admin' | 'guard' | 'receptionist' | null;
 
@@ -23,91 +22,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUserProfile = async (authUser: any) => {
     try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('user_id', authUser.id)
+        .single();
+        
+      if (data && !error) {
+        setRole(data.role as UserRole);
+      }
+      
       setUser(authUser);
       setIsAuthenticated(true);
-      
-      // Set a 5-second timeout for profile fetch
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('user_id', authUser.id)
-          .single();
-        
-        clearTimeout(timeoutId);
-        
-        if (data && !error) {
-          setRole(data.role as UserRole);
-        } else if (error) {
-          console.warn("Profile fetch warning:", error);
-          // Allow app to load even if profile fetch fails
-          setRole(null);
-        }
-      } catch (queryErr) {
-        clearTimeout(timeoutId);
-        console.warn("Profile query timeout or error:", queryErr);
-        // Continue without role - don't block loading
-        setRole(null);
-      }
     } catch (err) {
       console.error("Profile resolution error:", err);
+      // Even if role fetch fails, we still consider them structurally logged in depending on requirements,
+      // but if we want to block them we'd do something else here.
+      setUser(authUser);
+      setIsAuthenticated(true);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    let mounted = true;
-    
-    // Set timeout for initial session check
-    const sessionTimeout = setTimeout(() => {
-      if (mounted) {
-        console.warn("Session check timeout");
-        setIsLoading(false);
-      }
-    }, 8000);
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (mounted) {
-        clearTimeout(sessionTimeout);
-        if (session?.user) {
-          fetchUserProfile(session.user);
-          // Initialize visit store when user has existing session
-          visitStore.init();
-        } else {
-          setIsLoading(false);
-        }
-      }
-    }).catch((err) => {
-      if (mounted) {
-        clearTimeout(sessionTimeout);
-        console.error("Session fetch error:", err);
+    console.log("AuthContext: setting up onAuthStateChange...");
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("onAuthStateChange fired with event:", event);
+      if (session?.user) {
+        console.log("onAuthStateChange: user found, calling fetchUserProfile...");
+        // DO NOT await here. Awaiting Supabase DB queries inside onAuthStateChange 
+        // causes a lock deadlock because Supabase holds the JS lock while emitting.
+        fetchUserProfile(session.user);
+      } else {
+        console.log("onAuthStateChange: no user session, setting states to null/false...");
+        setIsAuthenticated(false);
+        setRole(null);
+        setUser(null);
         setIsLoading(false);
       }
     });
+    console.log("AuthContext: onAuthStateChange setup complete.");
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (mounted) {
-        if (session?.user) {
-          await fetchUserProfile(session.user);
-          // Initialize visit store when user is authenticated
-          await visitStore.init();
-        } else {
-          setIsAuthenticated(false);
-          setRole(null);
-          setUser(null);
-          setIsLoading(false);
-        }
-      }
-    });
+    // Fallback: If onAuthStateChange didn't fire for some reason, we avoid an infinite loading spinner.
+    const fallbackTimer = setTimeout(() => {
+      setIsLoading(false);
+    }, 5000);
 
     return () => {
-      mounted = false;
-      clearTimeout(sessionTimeout);
-      subscription.unsubscribe();
+      clearTimeout(fallbackTimer);
+      console.log("AuthContext: cleaning up auth listener...");
+      if (authListener?.subscription) {
+        authListener.subscription.unsubscribe();
+      }
     };
   }, []);
 

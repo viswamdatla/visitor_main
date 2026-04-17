@@ -126,6 +126,7 @@ export type Database = {
           pass_id: string | null
           purpose: string | null
           visitor_id: string | null
+          visitor_type: string | null
         }
         Insert: {
           checked_in_at?: string | null
@@ -136,6 +137,7 @@ export type Database = {
           pass_id?: string | null
           purpose?: string | null
           visitor_id?: string | null
+          visitor_type?: string | null
         }
         Update: {
           checked_in_at?: string | null
@@ -146,6 +148,7 @@ export type Database = {
           pass_id?: string | null
           purpose?: string | null
           visitor_id?: string | null
+          visitor_type?: string | null
         }
         Relationships: []
       }

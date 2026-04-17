@@ -169,15 +169,20 @@ export default function SecurityDashboard() {
       return;
     }
     
-    const now = new Date().toISOString();
-    await visitStore.updateVisit(scannedVisit.id, { status: 'checked_in', checkInTime: now });
-    setScannedVisit({ ...scannedVisit, status: 'checked_in', checkInTime: now });
-    toast({ title: 'Entry Allowed ✓', description: `${scannedVisit.visitorName} has been checked in.` });
-    
-    // Reset for next scan (keep camera open)
-    setScannedVisit(null);
-    setScanInput('');
-    setOtpInput('');
+    try {
+      const now = new Date().toISOString();
+      await visitStore.updateVisit(scannedVisit.id, { status: 'checked_in', checkInTime: now });
+      setScannedVisit({ ...scannedVisit, status: 'checked_in', checkInTime: now });
+      toast({ title: 'Entry Allowed ✓', description: `${scannedVisit.visitorName} has been checked in.` });
+      
+      // Reset for next scan (keep camera open)
+      setScannedVisit(null);
+      setScanInput('');
+      setOtpInput('');
+    } catch (error: any) {
+      console.error('Error checking in visitor:', error);
+      toast({ title: 'Check-in Failed', description: error.message || 'Failed to check in visitor. Check console for details.', variant: 'destructive' });
+    }
   };
 
   const handleDeny = async () => {
